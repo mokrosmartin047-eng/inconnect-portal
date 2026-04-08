@@ -22,7 +22,8 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      setError('Nesprávne prihlasovacie údaje')
+      console.error('Login error:', error.message, error.status)
+      setError(error.message || 'Nesprávne prihlasovacie údaje')
       setLoading(false)
       return
     }
