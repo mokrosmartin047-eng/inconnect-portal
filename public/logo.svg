@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 100" fill="none">
+  <!-- CONN -->
+  <text x="0" y="62" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="64" fill="#282828" letter-spacing="-2">CONN</text>
+  <!-- IN wave mark in cyan -->
+  <path d="M205 58 Q210 10, 218 58 Q226 106, 234 58 Q242 10, 250 58" stroke="#00B4D8" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <!-- ECT -->
+  <text x="260" y="62" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="64" fill="#282828" letter-spacing="-2">ECT</text>
+  <!-- ÚČTOVNÍCTVO -->
+  <text x="280" y="90" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="22" fill="#282828" letter-spacing="1">ÚČTOVNÍCTVO</text>
+</svg>

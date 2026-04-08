@@ -1,0 +1,54 @@
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return 'Práve teraz'
+  if (minutes < 60) return `${minutes} min`
+  if (hours < 24) return `${hours} hod`
+  if (days < 7) return `${days} dní`
+
+  return date.toLocaleDateString('sk-SK', {
+    day: 'numeric',
+    month: 'short',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  })
+}
+
+export function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('sk-SK', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function getCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    invoice: 'Faktúra',
+    contract: 'Zmluva',
+    receipt: 'Doklad',
+    other: 'Iné',
+  }
+  return labels[category] || category
+}
+
+export function getCategoryColor(category: string): string {
+  const colors: Record<string, string> = {
+    invoice: 'bg-blue-100 text-blue-700',
+    contract: 'bg-purple-100 text-purple-700',
+    receipt: 'bg-green-100 text-green-700',
+    other: 'bg-gray-100 text-gray-700',
+  }
+  return colors[category] || colors.other
+}
