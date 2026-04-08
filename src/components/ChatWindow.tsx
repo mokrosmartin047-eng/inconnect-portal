@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Send, Paperclip, Loader2, FileIcon } from 'lucide-react'
-import { formatTime } from '@/lib/utils'
+import { formatTime, sanitizeFileName } from '@/lib/utils'
 import type { Message, Profile } from '@/types'
 
 interface ChatWindowProps {
@@ -88,7 +88,7 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
     if (!file) return
 
     setUploading(true)
-    const filePath = `chat/${Date.now()}_${file.name}`
+    const filePath = `chat/${Date.now()}_${sanitizeFileName(file.name)}`
 
     const { error: uploadError } = await supabase.storage
       .from('documents')

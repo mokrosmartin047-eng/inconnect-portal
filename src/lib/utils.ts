@@ -43,6 +43,20 @@ export function getCategoryLabel(category: string): string {
   return labels[category] || category
 }
 
+export function sanitizeFileName(name: string): string {
+  const diacritics: Record<string, string> = {
+    'á':'a','ä':'a','č':'c','ď':'d','é':'e','í':'i','ĺ':'l','ľ':'l',
+    'ň':'n','ó':'o','ô':'o','ŕ':'r','š':'s','ť':'t','ú':'u','ý':'y',
+    'ž':'z','Á':'A','Ä':'A','Č':'C','Ď':'D','É':'E','Í':'I','Ĺ':'L',
+    'Ľ':'L','Ň':'N','Ó':'O','Ô':'O','Ŕ':'R','Š':'S','Ť':'T','Ú':'U',
+    'Ý':'Y','Ž':'Z',
+  }
+  return name
+    .split('').map(c => diacritics[c] || c).join('')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+}
+
 export function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
     invoice: 'bg-blue-100 text-blue-700',

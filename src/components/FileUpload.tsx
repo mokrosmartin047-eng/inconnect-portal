@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Upload, Loader2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { sanitizeFileName } from '@/lib/utils'
 
 interface FileUploadProps {
   userId: string
@@ -28,7 +29,7 @@ export default function FileUpload({ userId }: FileUploadProps) {
   async function uploadFile(file: File) {
     setUploading(true)
 
-    const filePath = `${userId}/${Date.now()}_${file.name}`
+    const filePath = `${userId}/${Date.now()}_${sanitizeFileName(file.name)}`
 
     const { error: uploadError } = await supabase.storage
       .from('documents')
