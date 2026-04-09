@@ -20,7 +20,7 @@ export default async function DocumentsPage() {
   if (profile?.role === 'accountant') redirect('/dashboard/clients')
 
   // Client sees their own documents
-  const { data: documents } = await supabase
+  const { data: documents, error: docsError } = await supabase
     .from('documents')
     .select('*, uploader:profiles(full_name)')
     .eq('client_id', user.id)
@@ -31,6 +31,10 @@ export default async function DocumentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-[#282828]">Dokumenty</h1>
         <p className="text-gray-500 text-sm mt-1">Vaše zdieľané súbory</p>
+        {/* Debug — remove later */}
+        <p className="text-[10px] text-red-400 mt-1">
+          DEBUG: user={user.id.substring(0,8)} | docs={documents?.length ?? 'null'} | error={docsError?.message || 'none'}
+        </p>
       </div>
 
       <FileUpload userId={user.id} clientId={user.id} />
