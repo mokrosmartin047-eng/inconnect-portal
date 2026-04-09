@@ -2,9 +2,9 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Upload, Loader2, X } from 'lucide-react'
+import { Upload, Loader2, X, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { sanitizeFileName, getMonthOptions } from '@/lib/utils'
+import { sanitizeFileName, getMonthOptions, formatFileSize } from '@/lib/utils'
 
 interface FileUploadProps {
   userId: string
@@ -21,47 +21,57 @@ const categories = [
 
 export default function FileUpload({ userId, clientId }: FileUploadProps) {
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
   const [category, setCategory] = useState('other')
   const [month, setMonth] = useState('')
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
   const monthOptions = getMonthOptions()
 
-  async function uploadFile(file: File) {
+  async function uploadFiles() {
     if (!month) {
-      alert('Vyberte mesiac, do ktorého dokument patrí')
+      alert('Vyberte mesiac, do ktorého dokumenty patria')
       return
     }
+    if (selectedFiles.length === 0) return
 
     setUploading(true)
+    setUploadProgress(0)
 
-    const filePath = `${clientId || userId}/${Date.now()}_${sanitizeFileName(file.name)}`
+    const total = selectedFiles.length
+    let uploaded = 0
 
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file)
+    for (const file of selectedFiles) {
+      const filePath = `${clientId || userId}/${Date.now()}_${sanitizeFileName(file.name)}`
 
-    if (uploadError) {
-      alert('Chyba pri nahrávaní: ' + uploadError.message)
-      setUploading(false)
-      return
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, file)
+
+      if (uploadError) {
+        alert(`Chyba pri nahrávaní "${file.name}": ${uploadError.message}`)
+        continue
+      }
+
+      await supabase.from('documents').insert({
+        name: file.name,
+        file_path: filePath,
+        file_size: file.size,
+        file_type: file.type,
+        category,
+        month,
+        client_id: clientId || userId,
+        uploaded_by: userId,
+      })
+
+      uploaded++
+      setUploadProgress(Math.round((uploaded / total) * 100))
     }
 
-    await supabase.from('documents').insert({
-      name: file.name,
-      file_path: filePath,
-      file_size: file.size,
-      file_type: file.type,
-      category,
-      month,
-      client_id: clientId || userId,
-      uploaded_by: userId,
-    })
-
-    // Notify recipient
+    // Notify recipient (one notification for all files)
     const { data: uploaderProfile } = await supabase
       .from('profiles')
       .select('full_name, role')
@@ -69,6 +79,7 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
       .single()
 
     if (uploaderProfile) {
+      const fileNames = selectedFiles.map(f => f.name).join(', ')
       fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,71 +88,96 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
           senderName: uploaderProfile.full_name,
           senderRole: uploaderProfile.role,
           clientId: clientId || userId,
-          detail: `Dokument: ${file.name}`,
+          detail: `${uploaded} ${uploaded === 1 ? 'dokument' : uploaded < 5 ? 'dokumenty' : 'dokumentov'}: ${fileNames.substring(0, 150)}`,
         }),
       }).catch(() => {})
     }
 
-    setSelectedFile(null)
+    setSelectedFiles([])
     setCategory('other')
     setMonth('')
     setUploading(false)
+    setUploadProgress(0)
     router.refresh()
+  }
+
+  function addFiles(files: FileList | null) {
+    if (!files) return
+    setSelectedFiles(prev => [...prev, ...Array.from(files)])
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragActive(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) setSelectedFile(file)
+    addFiles(e.dataTransfer.files)
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) setSelectedFile(file)
+    addFiles(e.target.files)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const canUpload = selectedFile && month && !uploading
+  const canUpload = selectedFiles.length > 0 && month && !uploading
+  const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
-      <h3 className="font-semibold text-[#282828] mb-4">Nahrať dokument</h3>
+      <h3 className="font-semibold text-[#282828] mb-4">Nahrať dokumenty</h3>
 
-      {!selectedFile ? (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${
-            dragActive
-              ? 'border-[#00B4D8] bg-[#00B4D8]/5'
-              : 'border-gray-200 hover:border-[#00B4D8] hover:bg-gray-50'
-          }`}
-        >
-          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">
-            Pretiahnite súbor sem alebo <span className="text-[#00B4D8] font-medium">kliknite</span>
-          </p>
-          <p className="text-xs text-gray-400 mt-1">PDF, Excel, Word, obrázky (max 50 MB)</p>
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-        </div>
-      ) : (
+      {/* Drop zone — always visible */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition mb-4 ${
+          dragActive
+            ? 'border-[#00B4D8] bg-[#00B4D8]/5'
+            : 'border-gray-200 hover:border-[#00B4D8] hover:bg-gray-50'
+        }`}
+      >
+        <Upload className="w-7 h-7 text-gray-400 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">
+          Pretiahnite súbory sem alebo <span className="text-[#00B4D8] font-medium">kliknite</span>
+        </p>
+        <p className="text-xs text-gray-400 mt-1">PDF, Excel, Word, obrázky — viac súborov naraz</p>
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileSelect}
+          multiple
+        />
+      </div>
+
+      {/* Selected files list */}
+      {selectedFiles.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-            <span className="text-sm text-[#282828] truncate">{selectedFile.name}</span>
-            <button
-              onClick={() => setSelectedFile(null)}
-              className="text-gray-400 hover:text-red-500 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          <div className="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
+            {selectedFiles.map((file, i) => (
+              <div key={`${file.name}-${i}`} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2">
+                <FileText className="w-4 h-4 text-purple-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-[#282828] truncate">{file.name}</p>
+                  <p className="text-[10px] text-gray-400">{formatFileSize(file.size)}</p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeFile(i) }}
+                  className="text-gray-400 hover:text-red-500 transition"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
+
+          <p className="text-xs text-gray-400">
+            {selectedFiles.length} {selectedFiles.length === 1 ? 'súbor' : selectedFiles.length < 5 ? 'súbory' : 'súborov'} — celkom {formatFileSize(totalSize)}
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -175,23 +211,33 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
           </div>
 
           {!month && (
-            <p className="text-xs text-red-500">Mesiac je povinný — vyberte, do ktorého mesiaca dokument patrí</p>
+            <p className="text-xs text-red-500">Mesiac je povinný — vyberte, do ktorého mesiaca dokumenty patria</p>
+          )}
+
+          {/* Progress bar */}
+          {uploading && (
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-[#00B4D8] h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
           )}
 
           <button
-            onClick={() => uploadFile(selectedFile)}
+            onClick={uploadFiles}
             disabled={!canUpload}
             className="w-full bg-[#00B4D8] hover:bg-[#0096b7] text-white font-medium py-2.5 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-40"
           >
             {uploading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Nahrávam...
+                Nahrávam... {uploadProgress}%
               </>
             ) : (
               <>
                 <Upload className="w-4 h-4" />
-                Nahrať
+                Nahrať {selectedFiles.length} {selectedFiles.length === 1 ? 'súbor' : selectedFiles.length < 5 ? 'súbory' : 'súborov'}
               </>
             )}
           </button>
