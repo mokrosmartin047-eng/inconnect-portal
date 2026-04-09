@@ -19,11 +19,19 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    // Rate limit check
+    const rlRes = await fetch('/api/auth/login', { method: 'POST' })
+    if (rlRes.status === 429) {
+      const rlData = await rlRes.json()
+      setError(rlData.error)
+      setLoading(false)
+      return
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-      console.error('Login error:', error.message, error.status)
-      setError(error.message || 'Nesprávne prihlasovacie údaje')
+      setError('Nesprávne prihlasovacie údaje')
       setLoading(false)
       return
     }

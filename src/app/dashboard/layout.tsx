@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
+import SessionTimeout from '@/components/SessionTimeout'
 
 export default async function DashboardLayout({
   children,
@@ -25,6 +26,7 @@ export default async function DashboardLayout({
         role={profile?.role || 'client'}
       />
       <main className="flex-1 p-6 overflow-auto bg-[#f7f8fa]">
+        <SessionTimeout />
         {children}
       </main>
     </div>
