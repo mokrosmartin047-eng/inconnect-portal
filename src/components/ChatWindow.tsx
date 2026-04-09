@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Send, Paperclip, Loader2, FileIcon } from 'lucide-react'
 import { formatTime, sanitizeFileName } from '@/lib/utils'
-import type { Message, Profile } from '@/types'
+import type { Message } from '@/types'
 
 interface ChatWindowProps {
   currentUserId: string
+  clientId: string
   initialMessages: Message[]
 }
 
-export default function ChatWindow({ currentUserId, initialMessages }: ChatWindowProps) {
+export default function ChatWindow({ currentUserId, clientId, initialMessages }: ChatWindowProps) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -25,13 +26,18 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Real-time subscription
+  // Real-time subscription — filtered by client_id
   useEffect(() => {
     const channel = supabase
-      .channel('messages')
+      .channel(`messages-${clientId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `client_id=eq.${clientId}`,
+        },
         async (payload) => {
           const { data: sender } = await supabase
             .from('profiles')
@@ -42,7 +48,6 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
           const newMsg = { ...payload.new, sender } as Message
           setMessages((prev) => [...prev, newMsg])
 
-          // Mark as read if not sender
           if (payload.new.sender_id !== currentUserId) {
             await supabase
               .from('messages')
@@ -56,7 +61,7 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [currentUserId, supabase])
+  }, [currentUserId, clientId, supabase])
 
   // Mark unread messages as read on mount
   useEffect(() => {
@@ -64,21 +69,44 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
       await supabase
         .from('messages')
         .update({ is_read: true })
+        .eq('client_id', clientId)
         .neq('sender_id', currentUserId)
         .eq('is_read', false)
     }
     markAsRead()
-  }, [currentUserId, supabase])
+  }, [currentUserId, clientId, supabase])
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
     if (!newMessage.trim() || sending) return
 
     setSending(true)
+    const msgContent = newMessage.trim()
     await supabase.from('messages').insert({
       sender_id: currentUserId,
-      content: newMessage.trim(),
+      client_id: clientId,
+      content: msgContent,
     })
+
+    // Notify admin if sender is client
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('full_name, role')
+      .eq('id', currentUserId)
+      .single()
+
+    if (senderProfile?.role === 'client') {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'message',
+          clientName: senderProfile.full_name,
+          detail: msgContent.substring(0, 100),
+        }),
+      }).catch(() => {})
+    }
+
     setNewMessage('')
     setSending(false)
   }
@@ -88,7 +116,7 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
     if (!file) return
 
     setUploading(true)
-    const filePath = `chat/${Date.now()}_${sanitizeFileName(file.name)}`
+    const filePath = `chat/${clientId}/${Date.now()}_${sanitizeFileName(file.name)}`
 
     const { error: uploadError } = await supabase.storage
       .from('documents')
@@ -101,6 +129,7 @@ export default function ChatWindow({ currentUserId, initialMessages }: ChatWindo
 
       await supabase.from('messages').insert({
         sender_id: currentUserId,
+        client_id: clientId,
         content: `Súbor: ${file.name}`,
         file_url: urlData.publicUrl,
         file_name: file.name,

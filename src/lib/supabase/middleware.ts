@@ -24,18 +24,36 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
+  const pathname = request.nextUrl.pathname
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith('/auth') && request.nextUrl.pathname !== '/') {
+  // Not logged in — redirect to login (except public pages)
+  if (!user && !pathname.startsWith('/auth') && pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname === '/') {
+  // Logged in on login page — redirect to dashboard
+  if (user && pathname === '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
+  }
+
+  // GDPR check for clients — must accept before using dashboard
+  if (user && pathname.startsWith('/dashboard')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, gdpr_accepted_at')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role === 'client' && !profile.gdpr_accepted_at) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/gdpr'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

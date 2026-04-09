@@ -4,10 +4,11 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Upload, Loader2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { sanitizeFileName } from '@/lib/utils'
+import { sanitizeFileName, getMonthOptions } from '@/lib/utils'
 
 interface FileUploadProps {
   userId: string
+  clientId?: string
 }
 
 const categories = [
@@ -18,19 +19,26 @@ const categories = [
   { value: 'other', label: 'Iné' },
 ]
 
-export default function FileUpload({ userId }: FileUploadProps) {
+export default function FileUpload({ userId, clientId }: FileUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [category, setCategory] = useState('other')
+  const [month, setMonth] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
+  const monthOptions = getMonthOptions()
 
   async function uploadFile(file: File) {
+    if (!month) {
+      alert('Vyberte mesiac, do ktorého dokument patrí')
+      return
+    }
+
     setUploading(true)
 
-    const filePath = `${userId}/${Date.now()}_${sanitizeFileName(file.name)}`
+    const filePath = `${clientId || userId}/${Date.now()}_${sanitizeFileName(file.name)}`
 
     const { error: uploadError } = await supabase.storage
       .from('documents')
@@ -48,11 +56,33 @@ export default function FileUpload({ userId }: FileUploadProps) {
       file_size: file.size,
       file_type: file.type,
       category,
+      month,
+      client_id: clientId || userId,
       uploaded_by: userId,
     })
 
+    // Notify admin
+    const { data: uploaderProfile } = await supabase
+      .from('profiles')
+      .select('full_name, role')
+      .eq('id', userId)
+      .single()
+
+    if (uploaderProfile?.role === 'client') {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'document',
+          clientName: uploaderProfile.full_name,
+          detail: `Dokument: ${file.name}`,
+        }),
+      }).catch(() => {})
+    }
+
     setSelectedFile(null)
     setCategory('other')
+    setMonth('')
     setUploading(false)
     router.refresh()
   }
@@ -68,6 +98,8 @@ export default function FileUpload({ userId }: FileUploadProps) {
     const file = e.target.files?.[0]
     if (file) setSelectedFile(file)
   }
+
+  const canUpload = selectedFile && month && !uploading
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5">
@@ -109,23 +141,45 @@ export default function FileUpload({ userId }: FileUploadProps) {
             </button>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1.5">Kategória</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#00B4D8] outline-none text-sm"
-            >
-              {categories.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">Kategória *</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#00B4D8] outline-none text-sm"
+              >
+                {categories.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">Mesiac *</label>
+              <select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className={`w-full px-4 py-2.5 rounded-xl border outline-none text-sm ${
+                  month ? 'border-gray-200 focus:border-[#00B4D8]' : 'border-red-300 bg-red-50/50'
+                }`}
+              >
+                <option value="">Vyberte mesiac</option>
+                {monthOptions.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {!month && (
+            <p className="text-xs text-red-500">Mesiac je povinný — vyberte, do ktorého mesiaca dokument patrí</p>
+          )}
 
           <button
             onClick={() => uploadFile(selectedFile)}
-            disabled={uploading}
-            className="w-full bg-[#00B4D8] hover:bg-[#0096b7] text-white font-medium py-2.5 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-60"
+            disabled={!canUpload}
+            className="w-full bg-[#00B4D8] hover:bg-[#0096b7] text-white font-medium py-2.5 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-40"
           >
             {uploading ? (
               <>

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardStats from '@/components/DashboardStats'
 import Link from 'next/link'
-import { MessageCircle, Upload, FileText } from 'lucide-react'
+import { MessageCircle, Upload, FileText, Users, ChevronRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 export default async function DashboardPage() {
@@ -10,13 +10,32 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/')
 
-  // Stats
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const isAdmin = profile?.role === 'accountant'
+
+  // Stats — RLS handles filtering automatically
   const [messagesRes, docsRes, recentDocsRes, readRes] = await Promise.all([
     supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', false).neq('sender_id', user.id),
     supabase.from('documents').select('id', { count: 'exact' }),
     supabase.from('documents').select('id', { count: 'exact' }).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
     supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', true),
   ])
+
+  // Admin: load clients list with activity
+  let clients: any[] = []
+  if (isAdmin) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'client')
+      .order('created_at', { ascending: false })
+    clients = data || []
+  }
 
   // Recent documents
   const { data: recentDocuments } = await supabase
@@ -36,7 +55,9 @@ export default async function DashboardPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#282828]">Prehľad</h1>
-        <p className="text-gray-500 text-sm mt-1">Vitajte v klientskom portáli InConnect</p>
+        <p className="text-gray-500 text-sm mt-1">
+          {isAdmin ? 'Prehľad všetkých klientov' : 'Vitajte v klientskom portáli InConnect'}
+        </p>
       </div>
 
       <DashboardStats
@@ -48,21 +69,70 @@ export default async function DashboardPage() {
 
       {/* Quick actions */}
       <div className="flex gap-3">
-        <Link
-          href="/dashboard/chat"
-          className="flex items-center gap-2 bg-[#00B4D8] hover:bg-[#0096b7] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition"
-        >
-          <MessageCircle className="w-4 h-4" />
-          Otvoriť chat
-        </Link>
-        <Link
-          href="/dashboard/documents"
-          className="flex items-center gap-2 bg-white hover:bg-gray-50 text-[#282828] border border-gray-200 px-5 py-2.5 rounded-xl text-sm font-medium transition"
-        >
-          <Upload className="w-4 h-4" />
-          Nahrať dokument
-        </Link>
+        {isAdmin ? (
+          <Link
+            href="/dashboard/clients"
+            className="flex items-center gap-2 bg-[#00B4D8] hover:bg-[#0096b7] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition"
+          >
+            <Users className="w-4 h-4" />
+            Zobraziť klientov
+          </Link>
+        ) : (
+          <>
+            <Link
+              href="/dashboard/chat"
+              className="flex items-center gap-2 bg-[#00B4D8] hover:bg-[#0096b7] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Otvoriť chat
+            </Link>
+            <Link
+              href="/dashboard/documents"
+              className="flex items-center gap-2 bg-white hover:bg-gray-50 text-[#282828] border border-gray-200 px-5 py-2.5 rounded-xl text-sm font-medium transition"
+            >
+              <Upload className="w-4 h-4" />
+              Nahrať dokument
+            </Link>
+          </>
+        )}
       </div>
+
+      {/* Admin: Client list */}
+      {isAdmin && clients.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-[#282828]">Klienti ({clients.length})</h3>
+            <Link href="/dashboard/clients" className="text-[#00B4D8] text-sm hover:underline">
+              Zobraziť všetkých
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {clients.slice(0, 5).map((client: any) => (
+              <Link
+                key={client.id}
+                href={`/dashboard/clients/${client.id}`}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition"
+              >
+                <div className="w-9 h-9 rounded-full bg-[#00B4D8]/10 flex items-center justify-center text-[#00B4D8] text-sm font-bold shrink-0">
+                  {client.full_name?.charAt(0) || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#282828]">{client.full_name}</p>
+                  <p className="text-xs text-gray-400">{client.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {client.gdpr_accepted_at ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">GDPR</span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">Bez GDPR</span>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent activity grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -70,9 +140,6 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-[#282828]">Posledné správy</h3>
-            <Link href="/dashboard/chat" className="text-[#00B4D8] text-sm hover:underline">
-              Zobraziť všetky
-            </Link>
           </div>
           {recentMessages && recentMessages.length > 0 ? (
             <div className="space-y-3">
@@ -102,9 +169,6 @@ export default async function DashboardPage() {
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-[#282828]">Posledné dokumenty</h3>
-            <Link href="/dashboard/documents" className="text-[#00B4D8] text-sm hover:underline">
-              Zobraziť všetky
-            </Link>
           </div>
           {recentDocuments && recentDocuments.length > 0 ? (
             <div className="space-y-3">

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { FileText, Download, Trash2, Filter } from 'lucide-react'
-import { formatDate, formatFileSize, getCategoryLabel, getCategoryColor } from '@/lib/utils'
+import { FileText, Download, Trash2, Filter, Calendar } from 'lucide-react'
+import { formatDate, formatFileSize, getCategoryLabel, getCategoryColor, getMonthLabel, getMonthOptions } from '@/lib/utils'
 import type { Document } from '@/types'
 import { useRouter } from 'next/navigation'
 
@@ -22,13 +22,17 @@ const categoryFilters = [
 ]
 
 export default function DocumentList({ documents, currentUserId }: DocumentListProps) {
-  const [filter, setFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [monthFilter, setMonthFilter] = useState('all')
   const supabase = createClient()
   const router = useRouter()
+  const monthOptions = getMonthOptions()
 
-  const filtered = filter === 'all'
-    ? documents
-    : documents.filter((d) => d.category === filter)
+  const filtered = documents.filter((d) => {
+    if (categoryFilter !== 'all' && d.category !== categoryFilter) return false
+    if (monthFilter !== 'all' && d.month !== monthFilter) return false
+    return true
+  })
 
   async function handleDownload(doc: Document) {
     const { data } = await supabase.storage
@@ -51,26 +55,45 @@ export default function DocumentList({ documents, currentUserId }: DocumentListP
   return (
     <div className="bg-white rounded-2xl border border-gray-100">
       {/* Header + filters */}
-      <div className="px-5 py-4 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-5 py-4 border-b border-gray-100 space-y-3">
+        <div className="flex items-center justify-between">
           <h3 className="font-semibold text-[#282828]">Dokumenty</h3>
           <span className="text-sm text-gray-400">{filtered.length} súborov</span>
         </div>
+
+        {/* Category filter */}
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          {categoryFilters.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
-                filter === f.value
-                  ? 'bg-[#00B4D8] text-white'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+          <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+          <div className="flex flex-wrap gap-1">
+            {categoryFilters.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setCategoryFilter(f.value)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  categoryFilter === f.value
+                    ? 'bg-[#00B4D8] text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Month filter */}
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 focus:border-[#00B4D8] outline-none"
+          >
+            <option value="all">Všetky mesiace</option>
+            {monthOptions.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -86,10 +109,15 @@ export default function DocumentList({ documents, currentUserId }: DocumentListP
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[#282828] truncate">{doc.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getCategoryColor(doc.category)}`}>
                     {getCategoryLabel(doc.category)}
                   </span>
+                  {doc.month && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-cyan-50 text-cyan-700">
+                      {getMonthLabel(doc.month)}
+                    </span>
+                  )}
                   <span className="text-xs text-gray-400">{formatFileSize(doc.file_size)}</span>
                   <span className="text-xs text-gray-400">&middot;</span>
                   <span className="text-xs text-gray-400">{formatDate(doc.created_at)}</span>

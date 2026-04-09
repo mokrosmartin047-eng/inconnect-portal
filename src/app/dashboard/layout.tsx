@@ -14,13 +14,16 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name')
+    .select('full_name, role')
     .eq('id', user.id)
     .single()
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar userName={profile?.full_name || user.email || 'User'} />
+      <Sidebar
+        userName={profile?.full_name || user.email || 'User'}
+        role={profile?.role || 'client'}
+      />
       <main className="flex-1 p-6 overflow-auto bg-[#f7f8fa]">
         {children}
       </main>

@@ -58,6 +58,28 @@ export function sanitizeFileName(name: string): string {
     .replace(/_+/g, '_')
 }
 
+const monthNames = [
+  'Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún',
+  'Júl', 'August', 'September', 'Október', 'November', 'December',
+]
+
+export function getMonthLabel(month: string): string {
+  const [year, m] = month.split('-')
+  const idx = parseInt(m, 10) - 1
+  return `${monthNames[idx]} ${year}`
+}
+
+export function getMonthOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    options.push({ value, label: getMonthLabel(value) })
+  }
+  return options
+}
+
 export function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
     invoice: 'bg-blue-100 text-blue-700',

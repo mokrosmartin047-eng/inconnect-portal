@@ -6,12 +6,14 @@ export interface Profile {
   full_name: string
   role: UserRole
   avatar_url: string | null
+  gdpr_accepted_at: string | null
   created_at: string
 }
 
 export interface Message {
   id: string
   sender_id: string
+  client_id: string
   content: string
   file_url: string | null
   file_name: string | null
@@ -27,6 +29,8 @@ export interface Document {
   file_size: number
   file_type: string
   category: 'invoice' | 'contract' | 'receipt' | 'ticket' | 'other'
+  client_id: string
+  month: string
   uploaded_by: string
   created_at: string
   uploader?: Profile

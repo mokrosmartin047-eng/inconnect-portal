@@ -9,18 +9,27 @@ import {
   MessageCircle,
   FileText,
   LogOut,
+  Users,
 } from 'lucide-react'
+import type { UserRole } from '@/types'
 
-const navItems = [
+const adminNav = [
+  { href: '/dashboard', label: 'Prehľad', icon: LayoutDashboard },
+  { href: '/dashboard/clients', label: 'Klienti', icon: Users },
+]
+
+const clientNav = [
   { href: '/dashboard', label: 'Prehľad', icon: LayoutDashboard },
   { href: '/dashboard/chat', label: 'Chat', icon: MessageCircle },
   { href: '/dashboard/documents', label: 'Dokumenty', icon: FileText },
 ]
 
-export default function Sidebar({ userName }: { userName: string }) {
+export default function Sidebar({ userName, role }: { userName: string; role: UserRole }) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+
+  const navItems = role === 'accountant' ? adminNav : clientNav
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -38,7 +47,7 @@ export default function Sidebar({ userName }: { userName: string }) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
           return (
             <Link
               key={item.href}
@@ -56,14 +65,19 @@ export default function Sidebar({ userName }: { userName: string }) {
         })}
       </nav>
 
-      {/* User + Logout */}
+      {/* Role badge + User + Logout */}
       <div className="px-4 py-4 border-t border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-full bg-[#00B4D8] flex items-center justify-center text-sm font-bold shrink-0">
               {userName.charAt(0).toUpperCase()}
             </div>
-            <span className="text-sm text-gray-300 truncate">{userName}</span>
+            <div className="min-w-0">
+              <span className="text-sm text-gray-300 truncate block">{userName}</span>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                {role === 'accountant' ? 'Admin' : 'Klient'}
+              </span>
+            </div>
           </div>
           <button
             onClick={handleLogout}
