@@ -18,12 +18,23 @@ export default async function DashboardPage() {
 
   const isAdmin = profile?.role === 'accountant'
 
-  // Stats — RLS handles filtering automatically
+  // Stats — explicit client_id filter for clients
+  const clientFilter = !isAdmin ? { client_id: user.id } : {}
+
+  let msgUnread = supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', false).neq('sender_id', user.id)
+  let docsAll = supabase.from('documents').select('id', { count: 'exact' })
+  let docsRecent = supabase.from('documents').select('id', { count: 'exact' }).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+  let msgRead = supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', true)
+
+  if (!isAdmin) {
+    msgUnread = msgUnread.eq('client_id', user.id)
+    docsAll = docsAll.eq('client_id', user.id)
+    docsRecent = docsRecent.eq('client_id', user.id)
+    msgRead = msgRead.eq('client_id', user.id)
+  }
+
   const [messagesRes, docsRes, recentDocsRes, readRes] = await Promise.all([
-    supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', false).neq('sender_id', user.id),
-    supabase.from('documents').select('id', { count: 'exact' }),
-    supabase.from('documents').select('id', { count: 'exact' }).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
-    supabase.from('messages').select('id', { count: 'exact' }).eq('is_read', true),
+    msgUnread, docsAll, docsRecent, msgRead,
   ])
 
   // Admin: load clients list with activity
@@ -38,18 +49,28 @@ export default async function DashboardPage() {
   }
 
   // Recent documents
-  const { data: recentDocuments } = await supabase
+  let docsQuery = supabase
     .from('documents')
     .select('*, uploader:profiles(full_name)')
     .order('created_at', { ascending: false })
     .limit(5)
 
+  if (!isAdmin) {
+    docsQuery = docsQuery.eq('client_id', user.id)
+  }
+  const { data: recentDocuments } = await docsQuery
+
   // Recent messages
-  const { data: recentMessages } = await supabase
+  let msgsQuery = supabase
     .from('messages')
     .select('*, sender:profiles(full_name)')
     .order('created_at', { ascending: false })
     .limit(5)
+
+  if (!isAdmin) {
+    msgsQuery = msgsQuery.eq('client_id', user.id)
+  }
+  const { data: recentMessages } = await msgsQuery
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
