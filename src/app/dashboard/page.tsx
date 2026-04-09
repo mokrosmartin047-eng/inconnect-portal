@@ -53,7 +53,7 @@ export default async function DashboardPage() {
   // Recent documents
   let docsQuery = supabase
     .from('documents')
-    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
+    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name), company:companies(name)')
     .order('created_at', { ascending: false })
     .limit(5)
 

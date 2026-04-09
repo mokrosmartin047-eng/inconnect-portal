@@ -5,10 +5,14 @@ import { createClient } from '@/lib/supabase/client'
 import { Upload, Loader2, X, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { sanitizeFileName, getMonthOptions, formatFileSize } from '@/lib/utils'
+import type { Company } from '@/types'
+import Link from 'next/link'
+import { Building2 } from 'lucide-react'
 
 interface FileUploadProps {
   userId: string
   clientId?: string
+  companies?: Company[]
 }
 
 const categories = [
@@ -19,21 +23,27 @@ const categories = [
   { value: 'other', label: 'Iné' },
 ]
 
-export default function FileUpload({ userId, clientId }: FileUploadProps) {
+export default function FileUpload({ userId, clientId, companies = [] }: FileUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
   const [category, setCategory] = useState('other')
   const [month, setMonth] = useState('')
+  const [companyId, setCompanyId] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
   const monthOptions = getMonthOptions()
+  const hasCompanies = companies.length > 0
 
   async function uploadFiles() {
     if (!month) {
       alert('Vyberte mesiac, do ktorého dokumenty patria')
+      return
+    }
+    if (hasCompanies && !companyId) {
+      alert('Vyberte firmu')
       return
     }
     if (selectedFiles.length === 0) return
@@ -63,6 +73,7 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
         file_type: file.type,
         category,
         month,
+        company_id: companyId || null,
         client_id: clientId || userId,
         uploaded_by: userId,
       })
@@ -96,6 +107,7 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
     setSelectedFiles([])
     setCategory('other')
     setMonth('')
+    setCompanyId('')
     setUploading(false)
     setUploadProgress(0)
     router.refresh()
@@ -121,7 +133,7 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const canUpload = selectedFiles.length > 0 && month && !uploading
+  const canUpload = selectedFiles.length > 0 && month && (!hasCompanies || companyId) && !uploading
   const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0)
 
   return (
@@ -178,6 +190,37 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
           <p className="text-xs text-gray-400">
             {selectedFiles.length} {selectedFiles.length === 1 ? 'súbor' : selectedFiles.length < 5 ? 'súbory' : 'súborov'} — celkom {formatFileSize(totalSize)}
           </p>
+
+          {/* Company select */}
+          {hasCompanies && (
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">Firma *</label>
+              <select
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className={`w-full px-4 py-2.5 rounded-xl border outline-none text-sm ${
+                  companyId ? 'border-gray-200 focus:border-[#00B4D8]' : 'border-red-300 bg-red-50/50'
+                }`}
+              >
+                <option value="">Vyberte firmu</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.ico ? ` (${c.ico})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!hasCompanies && (
+            <div className="bg-amber-50 rounded-xl p-3 flex items-center gap-3">
+              <Building2 className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-sm text-amber-800 font-medium">Najprv pridajte firmu</p>
+                <Link href="/dashboard/companies" className="text-xs text-[#00B4D8] hover:underline">
+                  Prejsť na správu firiem
+                </Link>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

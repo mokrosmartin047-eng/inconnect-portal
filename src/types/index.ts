@@ -10,6 +10,14 @@ export interface Profile {
   created_at: string
 }
 
+export interface Company {
+  id: string
+  client_id: string
+  name: string
+  ico: string | null
+  created_at: string
+}
+
 export interface Message {
   id: string
   sender_id: string
@@ -30,8 +38,10 @@ export interface Document {
   file_type: string
   category: 'invoice' | 'contract' | 'receipt' | 'ticket' | 'other'
   client_id: string
+  company_id: string | null
   month: string
   uploaded_by: string
   created_at: string
   uploader?: Profile
+  company?: Company
 }

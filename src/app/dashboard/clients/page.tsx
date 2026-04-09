@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, MessageCircle, FileText, ShieldCheck, ShieldX } from 'lucide-react'
+import { ChevronRight, MessageCircle, FileText, ShieldCheck, ShieldX, Building2 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 export default async function ClientsPage() {
@@ -28,16 +28,18 @@ export default async function ClientsPage() {
     .order('full_name', { ascending: true })
 
   // Get unread message counts and document counts per client
-  const clientStats: Record<string, { unread: number; docs: number }> = {}
+  const clientStats: Record<string, { unread: number; docs: number; companies: number }> = {}
   if (clients) {
     for (const client of clients) {
-      const [msgRes, docRes] = await Promise.all([
+      const [msgRes, docRes, compRes] = await Promise.all([
         supabase.from('messages').select('id', { count: 'exact' }).eq('client_id', client.id).eq('is_read', false).neq('sender_id', user.id),
         supabase.from('documents').select('id', { count: 'exact' }).eq('client_id', client.id),
+        supabase.from('companies').select('id', { count: 'exact' }).eq('client_id', client.id),
       ])
       clientStats[client.id] = {
         unread: msgRes.count || 0,
         docs: docRes.count || 0,
+        companies: compRes.count || 0,
       }
     }
   }
@@ -87,6 +89,10 @@ export default async function ClientsPage() {
                   <div className="flex items-center gap-1">
                     <FileText className="w-3.5 h-3.5" />
                     <span>{stats.docs}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>{stats.companies}</span>
                   </div>
                   <span className="text-gray-300">{formatDate(client.created_at)}</span>
                   <ChevronRight className="w-4 h-4 text-gray-300" />

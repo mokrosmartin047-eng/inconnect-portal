@@ -42,9 +42,16 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   // Load documents for this client
   const { data: documents } = await supabase
     .from('documents')
-    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
+    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name), company:companies(name)')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
+
+  // Load client's companies
+  const { data: companies } = await supabase
+    .from('companies')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('name', { ascending: true })
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -62,7 +69,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </div>
           <div>
             <h1 className="text-xl font-bold text-[#282828]">{client.full_name}</h1>
-            <p className="text-sm text-gray-400">{client.email}</p>
+            <p className="text-sm text-gray-400">
+              {client.email}
+              {companies && companies.length > 0 && (
+                <span className="ml-2">
+                  — {companies.map((c: any) => c.name).join(', ')}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         {client.gdpr_accepted_at ? (
@@ -90,8 +104,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
         {/* Documents */}
         <div className="space-y-4">
-          <FileUpload userId={user.id} clientId={clientId} />
-          <DocumentList documents={documents || []} currentUserId={user.id} />
+          <FileUpload userId={user.id} clientId={clientId} companies={companies || []} />
+          <DocumentList documents={documents || []} currentUserId={user.id} companies={companies || []} />
         </div>
       </div>
     </div>

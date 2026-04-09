@@ -10,7 +10,6 @@ export default async function DocumentsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/')
 
-  // This page is only for clients — admin accesses docs via /dashboard/clients/[id]
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -19,12 +18,18 @@ export default async function DocumentsPage() {
 
   if (profile?.role === 'accountant') redirect('/dashboard/clients')
 
-  // Client sees their own documents
-  const { data: documents, error: docsError } = await supabase
-    .from('documents')
-    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
-    .eq('client_id', user.id)
-    .order('created_at', { ascending: false })
+  const [docsRes, companiesRes] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name), company:companies(name)')
+      .eq('client_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('companies')
+      .select('*')
+      .eq('client_id', user.id)
+      .order('name', { ascending: true }),
+  ])
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -33,8 +38,8 @@ export default async function DocumentsPage() {
         <p className="text-gray-500 text-sm mt-1">Vaše zdieľané súbory</p>
       </div>
 
-      <FileUpload userId={user.id} clientId={user.id} />
-      <DocumentList documents={documents || []} currentUserId={user.id} />
+      <FileUpload userId={user.id} clientId={user.id} companies={companiesRes.data || []} />
+      <DocumentList documents={docsRes.data || []} currentUserId={user.id} companies={companiesRes.data || []} />
     </div>
   )
 }

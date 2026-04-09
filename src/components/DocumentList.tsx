@@ -2,14 +2,15 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { FileText, Download, Trash2, Filter, Calendar } from 'lucide-react'
+import { FileText, Download, Trash2, Filter, Calendar, Building2 } from 'lucide-react'
 import { formatDate, formatFileSize, getCategoryLabel, getCategoryColor, getMonthLabel, getMonthOptions } from '@/lib/utils'
-import type { Document } from '@/types'
+import type { Document, Company } from '@/types'
 import { useRouter } from 'next/navigation'
 
 interface DocumentListProps {
   documents: Document[]
   currentUserId: string
+  companies?: Company[]
 }
 
 const categoryFilters = [
@@ -21,9 +22,10 @@ const categoryFilters = [
   { value: 'other', label: 'Iné' },
 ]
 
-export default function DocumentList({ documents, currentUserId }: DocumentListProps) {
+export default function DocumentList({ documents, currentUserId, companies = [] }: DocumentListProps) {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [monthFilter, setMonthFilter] = useState('all')
+  const [companyFilter, setCompanyFilter] = useState('all')
   const supabase = createClient()
   const router = useRouter()
   const monthOptions = getMonthOptions()
@@ -31,6 +33,7 @@ export default function DocumentList({ documents, currentUserId }: DocumentListP
   const filtered = documents.filter((d) => {
     if (categoryFilter !== 'all' && d.category !== categoryFilter) return false
     if (monthFilter !== 'all' && d.month !== monthFilter) return false
+    if (companyFilter !== 'all' && d.company_id !== companyFilter) return false
     return true
   })
 
@@ -81,19 +84,36 @@ export default function DocumentList({ documents, currentUserId }: DocumentListP
           </div>
         </div>
 
-        {/* Month filter */}
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 focus:border-[#00B4D8] outline-none"
-          >
-            <option value="all">Všetky mesiace</option>
-            {monthOptions.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+        {/* Company + Month filter */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {companies.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 focus:border-[#00B4D8] outline-none"
+              >
+                <option value="all">Všetky firmy</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 focus:border-[#00B4D8] outline-none"
+            >
+              <option value="all">Všetky mesiace</option>
+              {monthOptions.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -110,6 +130,11 @@ export default function DocumentList({ documents, currentUserId }: DocumentListP
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[#282828] truncate">{doc.name}</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {(doc.company as any)?.name && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">
+                      {(doc.company as any).name}
+                    </span>
+                  )}
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getCategoryColor(doc.category)}`}>
                     {getCategoryLabel(doc.category)}
                   </span>

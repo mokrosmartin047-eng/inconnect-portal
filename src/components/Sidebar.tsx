@@ -10,6 +10,7 @@ import {
   FileText,
   LogOut,
   Users,
+  Building2,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
 
@@ -22,6 +23,7 @@ const clientNav = [
   { href: '/dashboard', label: 'Prehľad', icon: LayoutDashboard },
   { href: '/dashboard/chat', label: 'Chat', icon: MessageCircle },
   { href: '/dashboard/documents', label: 'Dokumenty', icon: FileText },
+  { href: '/dashboard/companies', label: 'Firmy', icon: Building2 },
 ]
 
 export default function Sidebar({ userName, role }: { userName: string; role: UserRole }) {
