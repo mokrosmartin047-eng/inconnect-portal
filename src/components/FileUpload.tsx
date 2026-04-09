@@ -61,20 +61,22 @@ export default function FileUpload({ userId, clientId }: FileUploadProps) {
       uploaded_by: userId,
     })
 
-    // Notify admin
+    // Notify recipient
     const { data: uploaderProfile } = await supabase
       .from('profiles')
       .select('full_name, role')
       .eq('id', userId)
       .single()
 
-    if (uploaderProfile?.role === 'client') {
+    if (uploaderProfile) {
       fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'document',
-          clientName: uploaderProfile.full_name,
+          senderName: uploaderProfile.full_name,
+          senderRole: uploaderProfile.role,
+          clientId: clientId || userId,
           detail: `Dokument: ${file.name}`,
         }),
       }).catch(() => {})

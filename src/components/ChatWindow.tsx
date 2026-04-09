@@ -88,20 +88,22 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
       content: msgContent,
     })
 
-    // Notify admin if sender is client
+    // Notify recipient
     const { data: senderProfile } = await supabase
       .from('profiles')
       .select('full_name, role')
       .eq('id', currentUserId)
       .single()
 
-    if (senderProfile?.role === 'client') {
+    if (senderProfile) {
       fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'message',
-          clientName: senderProfile.full_name,
+          senderName: senderProfile.full_name,
+          senderRole: senderProfile.role,
+          clientId,
           detail: msgContent.substring(0, 100),
         }),
       }).catch(() => {})
