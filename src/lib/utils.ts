@@ -38,6 +38,7 @@ export function getCategoryLabel(category: string): string {
     invoice: 'Faktúra',
     contract: 'Zmluva',
     receipt: 'Doklad',
+    ticket: 'Bloček',
     other: 'Iné',
   }
   return labels[category] || category
@@ -62,6 +63,7 @@ export function getCategoryColor(category: string): string {
     invoice: 'bg-blue-100 text-blue-700',
     contract: 'bg-purple-100 text-purple-700',
     receipt: 'bg-green-100 text-green-700',
+    ticket: 'bg-amber-100 text-amber-700',
     other: 'bg-gray-100 text-gray-700',
   }
   return colors[category] || colors.other

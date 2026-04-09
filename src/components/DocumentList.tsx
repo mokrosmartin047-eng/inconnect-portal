@@ -17,6 +17,7 @@ const categoryFilters = [
   { value: 'invoice', label: 'Faktúry' },
   { value: 'contract', label: 'Zmluvy' },
   { value: 'receipt', label: 'Doklady' },
+  { value: 'ticket', label: 'Bločky' },
   { value: 'other', label: 'Iné' },
 ]
 

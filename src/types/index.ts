@@ -26,7 +26,7 @@ export interface Document {
   file_path: string
   file_size: number
   file_type: string
-  category: 'invoice' | 'contract' | 'receipt' | 'other'
+  category: 'invoice' | 'contract' | 'receipt' | 'ticket' | 'other'
   uploaded_by: string
   created_at: string
   uploader?: Profile

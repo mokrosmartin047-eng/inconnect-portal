@@ -14,6 +14,7 @@ const categories = [
   { value: 'invoice', label: 'Faktúra' },
   { value: 'contract', label: 'Zmluva' },
   { value: 'receipt', label: 'Doklad' },
+  { value: 'ticket', label: 'Bloček' },
   { value: 'other', label: 'Iné' },
 ]
 
