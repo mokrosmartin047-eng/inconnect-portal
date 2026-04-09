@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Send, Paperclip, Loader2, FileIcon } from 'lucide-react'
+import { Send, Paperclip, Loader2, FileIcon, RefreshCw } from 'lucide-react'
 import { formatTime, sanitizeFileName } from '@/lib/utils'
 import type { Message } from '@/types'
 
@@ -19,68 +19,44 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
   const [uploading, setUploading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
 
-  // Scroll to bottom
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [])
 
-  // Real-time subscription — filtered by client_id
+  // Scroll to bottom when messages change
   useEffect(() => {
-    const channel = supabase
-      .channel(`messages-${clientId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `client_id=eq.${clientId}`,
-        },
-        async (payload) => {
-          // Skip if this is our own message (already added optimistically)
-          if (payload.new.sender_id === currentUserId) return
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', payload.new.sender_id)
-            .single()
+  // Poll for new messages every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const { data } = await supabaseRef.current
+        .from('messages')
+        .select('*, sender:profiles!messages_sender_id_fkey(*)')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: true })
 
-          const newMsg = { ...payload.new, sender } as Message
+      if (data) {
+        setMessages(data)
+      }
+    }, 3000)
 
-          // Deduplicate
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev
-            return [...prev, newMsg]
-          })
-
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .eq('id', payload.new.id)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [currentUserId, clientId, supabase])
+    return () => clearInterval(interval)
+  }, [clientId])
 
   // Mark unread messages as read on mount
   useEffect(() => {
-    async function markAsRead() {
-      await supabase
-        .from('messages')
-        .update({ is_read: true })
-        .eq('client_id', clientId)
-        .neq('sender_id', currentUserId)
-        .eq('is_read', false)
-    }
-    markAsRead()
-  }, [currentUserId, clientId, supabase])
+    supabaseRef.current
+      .from('messages')
+      .update({ is_read: true })
+      .eq('client_id', clientId)
+      .neq('sender_id', currentUserId)
+      .eq('is_read', false)
+      .then(() => {})
+  }, [currentUserId, clientId])
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
@@ -90,53 +66,37 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
     const msgContent = newMessage.trim()
     setNewMessage('')
 
-    // Optimistic update — show message immediately
-    const optimisticMsg: Message = {
-      id: `temp-${Date.now()}`,
+    // Insert message
+    const { data: inserted } = await supabaseRef.current.from('messages').insert({
       sender_id: currentUserId,
       client_id: clientId,
       content: msgContent,
-      file_url: null,
-      file_name: null,
-      is_read: false,
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, optimisticMsg])
+    }).select('*, sender:profiles!messages_sender_id_fkey(*)').single()
 
-    const { data: inserted } = await supabase.from('messages').insert({
-      sender_id: currentUserId,
-      client_id: clientId,
-      content: msgContent,
-    }).select('*').single()
-
-    // Replace optimistic message with real one
     if (inserted) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === optimisticMsg.id ? { ...inserted, sender: undefined } : m))
-      )
+      setMessages((prev) => [...prev, inserted])
     }
 
     // Notify recipient (fire and forget)
-    supabase
+    const { data: senderProfile } = await supabaseRef.current
       .from('profiles')
       .select('full_name, role')
       .eq('id', currentUserId)
       .single()
-      .then(({ data: senderProfile }) => {
-        if (senderProfile) {
-          fetch('/api/notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'message',
-              senderName: senderProfile.full_name,
-              senderRole: senderProfile.role,
-              clientId,
-              detail: msgContent.substring(0, 100),
-            }),
-          }).catch(() => {})
-        }
-      })
+
+    if (senderProfile) {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'message',
+          senderName: senderProfile.full_name,
+          senderRole: senderProfile.role,
+          clientId,
+          detail: msgContent.substring(0, 100),
+        }),
+      }).catch(() => {})
+    }
 
     setSending(false)
   }
@@ -148,22 +108,26 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
     setUploading(true)
     const filePath = `chat/${clientId}/${Date.now()}_${sanitizeFileName(file.name)}`
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseRef.current.storage
       .from('documents')
       .upload(filePath, file)
 
     if (!uploadError) {
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = supabaseRef.current.storage
         .from('documents')
         .getPublicUrl(filePath)
 
-      await supabase.from('messages').insert({
+      const { data: inserted } = await supabaseRef.current.from('messages').insert({
         sender_id: currentUserId,
         client_id: clientId,
         content: `Súbor: ${file.name}`,
         file_url: urlData.publicUrl,
         file_name: file.name,
-      })
+      }).select('*, sender:profiles!messages_sender_id_fkey(*)').single()
+
+      if (inserted) {
+        setMessages((prev) => [...prev, inserted])
+      }
     }
 
     setUploading(false)
@@ -187,7 +151,7 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
               key={msg.id}
               className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-[70%] ${isMine ? 'order-2' : ''}`}>
+              <div className={`max-w-[70%]`}>
                 {!isMine && (
                   <p className="text-xs text-gray-400 mb-1 ml-1">
                     {(msg.sender as any)?.full_name || 'Neznámy'}
@@ -216,9 +180,6 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
                 </div>
                 <p className={`text-[10px] text-gray-400 mt-1 ${isMine ? 'text-right mr-1' : 'ml-1'}`}>
                   {formatTime(msg.created_at)}
-                  {isMine && msg.is_read && (
-                    <span className="ml-1 text-[#00B4D8]">&#10003;</span>
-                  )}
                 </p>
               </div>
             </div>
