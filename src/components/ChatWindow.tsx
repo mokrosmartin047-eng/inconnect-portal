@@ -39,6 +39,9 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
           filter: `client_id=eq.${clientId}`,
         },
         async (payload) => {
+          // Skip if this is our own message (already added optimistically)
+          if (payload.new.sender_id === currentUserId) return
+
           const { data: sender } = await supabase
             .from('profiles')
             .select('*')
@@ -46,14 +49,17 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
             .single()
 
           const newMsg = { ...payload.new, sender } as Message
-          setMessages((prev) => [...prev, newMsg])
 
-          if (payload.new.sender_id !== currentUserId) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', payload.new.id)
-          }
+          // Deduplicate
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            return [...prev, newMsg]
+          })
+
+          await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('id', payload.new.id)
         }
       )
       .subscribe()
@@ -82,34 +88,56 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
 
     setSending(true)
     const msgContent = newMessage.trim()
-    await supabase.from('messages').insert({
+    setNewMessage('')
+
+    // Optimistic update — show message immediately
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
       sender_id: currentUserId,
       client_id: clientId,
       content: msgContent,
-    })
+      file_url: null,
+      file_name: null,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
 
-    // Notify recipient
-    const { data: senderProfile } = await supabase
+    const { data: inserted } = await supabase.from('messages').insert({
+      sender_id: currentUserId,
+      client_id: clientId,
+      content: msgContent,
+    }).select('*').single()
+
+    // Replace optimistic message with real one
+    if (inserted) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === optimisticMsg.id ? { ...inserted, sender: undefined } : m))
+      )
+    }
+
+    // Notify recipient (fire and forget)
+    supabase
       .from('profiles')
       .select('full_name, role')
       .eq('id', currentUserId)
       .single()
+      .then(({ data: senderProfile }) => {
+        if (senderProfile) {
+          fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'message',
+              senderName: senderProfile.full_name,
+              senderRole: senderProfile.role,
+              clientId,
+              detail: msgContent.substring(0, 100),
+            }),
+          }).catch(() => {})
+        }
+      })
 
-    if (senderProfile) {
-      fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'message',
-          senderName: senderProfile.full_name,
-          senderRole: senderProfile.role,
-          clientId,
-          detail: msgContent.substring(0, 100),
-        }),
-      }).catch(() => {})
-    }
-
-    setNewMessage('')
     setSending(false)
   }
 
