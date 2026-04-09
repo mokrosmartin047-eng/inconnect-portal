@@ -35,14 +35,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   // Load messages for this client
   const { data: messages } = await supabase
     .from('messages')
-    .select('*, sender:profiles(*)')
+    .select('*, sender:profiles!messages_sender_id_fkey(*)')
     .eq('client_id', clientId)
     .order('created_at', { ascending: true })
 
   // Load documents for this client
   const { data: documents } = await supabase
     .from('documents')
-    .select('*, uploader:profiles(full_name)')
+    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
 

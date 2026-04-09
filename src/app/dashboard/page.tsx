@@ -53,7 +53,7 @@ export default async function DashboardPage() {
   // Recent documents
   let docsQuery = supabase
     .from('documents')
-    .select('*, uploader:profiles(full_name)')
+    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(5)
 
@@ -65,7 +65,7 @@ export default async function DashboardPage() {
   // Recent messages
   let msgsQuery = supabase
     .from('messages')
-    .select('*, sender:profiles(full_name)')
+    .select('*, sender:profiles!messages_sender_id_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(5)
 

@@ -21,7 +21,7 @@ export default async function ChatPage() {
   // Client sees their own messages
   const { data: messages } = await supabase
     .from('messages')
-    .select('*, sender:profiles(*)')
+    .select('*, sender:profiles!messages_sender_id_fkey(*)')
     .eq('client_id', user.id)
     .order('created_at', { ascending: true })
 

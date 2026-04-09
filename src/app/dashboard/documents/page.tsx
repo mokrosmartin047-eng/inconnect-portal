@@ -22,7 +22,7 @@ export default async function DocumentsPage() {
   // Client sees their own documents
   const { data: documents, error: docsError } = await supabase
     .from('documents')
-    .select('*, uploader:profiles(full_name)')
+    .select('*, uploader:profiles!documents_uploaded_by_fkey(full_name)')
     .eq('client_id', user.id)
     .order('created_at', { ascending: false })
 
