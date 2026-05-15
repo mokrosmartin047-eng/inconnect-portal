@@ -17,12 +17,16 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabaseRef = useRef(createClient())
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesContainerRef.current
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
   }, [])
 
   // Scroll to bottom when messages change
@@ -30,7 +34,7 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  // Poll for new messages every 3 seconds
+  // Poll for new messages every 3 seconds — only update if count changed
   useEffect(() => {
     const interval = setInterval(async () => {
       const { data } = await supabaseRef.current
@@ -40,7 +44,12 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
         .order('created_at', { ascending: true })
 
       if (data) {
-        setMessages(data)
+        setMessages((prev) => {
+          if (prev.length === data.length && prev[prev.length - 1]?.id === data[data.length - 1]?.id) {
+            return prev // no change — skip re-render
+          }
+          return data
+        })
       }
     }, 3000)
 
@@ -137,7 +146,7 @@ export default function ChatWindow({ currentUserId, clientId, initialMessages }:
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-400 text-sm">Zatiaľ žiadne správy. Napíšte prvú!</p>
